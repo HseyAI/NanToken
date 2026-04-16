@@ -1,0 +1,70 @@
+llm_provider: openai
+model: gpt-4
+api_key: YOUR_API_KEY_HERE
+endpoint: ""  # For custom LLM APIs (Ollama, LM Studio, etc.)
+
+budget:
+  daily_limit: 100000
+  monthly_limit: 3000000
+  warn_threshold: 0.8
+  block_excess: false
+
+pricing:
+  input_per_1k: 0.01
+  output_per_1k: 0.03
+  model_pricing:
+    # OpenAI
+    gpt-4: {input: 0.03, output: 0.06}
+    gpt-4-turbo: {input: 0.01, output: 0.03}
+    gpt-4o: {input: 0.005, output: 0.015}
+    gpt-4o-mini: {input: 0.00015, output: 0.0006}
+    gpt-3.5-turbo: {input: 0.0005, output: 0.0015}
+    
+    # Anthropic
+    claude-3-opus: {input: 0.015, output: 0.075}
+    claude-3-sonnet: {input: 0.003, output: 0.015}
+    claude-3-5-sonnet: {input: 0.003, output: 0.015}
+    claude-3-haiku: {input: 0.00025, output: 0.00125}
+    
+    # Google
+    gemini-pro: {input: 0.00125, output: 0.005}
+    gemini-1.5-pro: {input: 0.00125, output: 0.005}
+    gemini-1.5-flash: {input: 0.000075, output: 0.0003}
+    
+    # Moonshot (Kimi)
+    kimi: {input: 0.01, output: 0.03}
+    kimi-k2: {input: 0.01, output: 0.03}
+    
+    # Qwen
+    qwen-turbo: {input: 0.002, output: 0.006}
+    qwen-plus: {input: 0.004, output: 0.012}
+    qwen-max: {input: 0.02, output: 0.06}
+    
+    # DeepSeek
+    deepseek-chat: {input: 0.00014, output: 0.00028}
+    deepseek-coder: {input: 0.00014, output: 0.00028}
+    
+    # Meta
+    llama-3-70b: {input: 0.0007, output: 0.0008}
+    llama-3-8b: {input: 0.0002, output: 0.0002}
+    
+    # Mistral
+    mistral-large: {input: 0.002, output: 0.006}
+    
+    # Local/Others (fallback)
+    ollama: {input: 0.0, output: 0.0}
+    lmstudio: {input: 0.0, output: 0.0}
+
+optimization:
+  minify_prompts: true
+  trim_context: true
+  enable_cache: true
+  cache_ttl_hours: 24
+
+clarifying_questions:
+  enabled: true
+  always_ask: false
+  threshold_tokens: 500
+
+cache_dir: .smartllm_cache
+log_level: INFO

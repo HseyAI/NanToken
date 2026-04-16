@@ -1,0 +1,45 @@
+llm_provider: openai   # Options: openai, anthropic, gemini, kimi, qwen, deepseek, ollama, custom
+model: gpt-4           # Model name (e.g., gpt-4, gpt-4o, claude-3-sonnet, kimi, qwen-turbo)
+api_key: YOUR_API_KEY  # Leave empty to use environment variables
+
+# Optional: For custom/local LLM APIs (Ollama, LM Studio, etc.)
+# endpoint: "http://localhost:1234/v1/chat/completions"
+
+budget:
+  daily_limit: 100000
+  monthly_limit: 3000000
+  warn_threshold: 0.8
+  block_excess: false
+
+pricing:
+  input_per_1k: 0.01
+  output_per_1k: 0.03
+
+optimization:
+  minify_prompts: true
+  trim_context: true
+  enable_cache: true
+
+clarifying_questions:
+  enabled: true
+
+cache_dir: .smartllm_cache
+
+# ============================================================
+# API KEY SETUP - Choose one method:
+# ============================================================
+# 
+# Method 1: Set in this file (above)
+#   api_key: sk-your-key-here
+#
+# Method 2: Use environment variables
+#   export OPENAI_API_KEY=sk-...
+#   export ANTHROPIC_API_KEY=sk-ant-...
+#   export GEMINI_API_KEY=your-gemini-key
+#   export KIMI_API_KEY=your-kimi-key
+#   export QWEN_API_KEY=your-qwen-key
+#
+# Method 3: For local models (Ollama/LM Studio)
+#   endpoint: "http://localhost:11434/v1/chat/completions"
+#   model: llama3   (or any model you have running)
+#   api_key: ""    (no key needed for local)

@@ -1,7 +1,8 @@
 import json
 import os
+import tempfile
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -60,13 +61,22 @@ class BudgetManager:
                 self.usage_history = []
     
     def _save_usage(self) -> None:
-        """Save usage history to storage."""
+        """Save usage history to storage (atomic write)."""
         data = {
             "history": self.usage_history,
             "last_updated": datetime.now().isoformat(),
         }
-        with open(self.storage_path, "w") as f:
-            json.dump(data, f, indent=2)
+        storage_dir = os.path.dirname(os.path.abspath(self.storage_path))
+        os.makedirs(storage_dir, exist_ok=True)
+        try:
+            fd, tmp_path = tempfile.mkstemp(dir=storage_dir, suffix=".tmp")
+            with os.fdopen(fd, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, self.storage_path)
+        except OSError:
+            # Fallback to direct write if atomic fails
+            with open(self.storage_path, "w") as f:
+                json.dump(data, f, indent=2)
     
     def add_usage(
         self,
@@ -75,6 +85,8 @@ class BudgetManager:
         cost: float,
         prompt: str,
         response: Optional[str] = None,
+        project: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> None:
         """Record a usage event."""
         record = {
@@ -85,6 +97,8 @@ class BudgetManager:
             "cost": cost,
             "prompt": prompt[:100],
             "response": response[:100] if response else None,
+            "project": project,
+            "session_id": session_id,
         }
         self.usage_history.append(record)
         self._save_usage()
@@ -182,6 +196,49 @@ class BudgetManager:
         ]
         self._save_usage()
     
+    def get_project_usage(self, days: int = 30, project: Optional[str] = None) -> List[Dict]:
+        """Get usage aggregated by project.
+
+        If project is specified, returns daily breakdown for that project.
+        Otherwise returns per-project totals.
+        """
+        now = datetime.now()
+        start = now - timedelta(days=days)
+
+        recent = [
+            r for r in self.usage_history
+            if datetime.fromisoformat(r["timestamp"]) >= start
+        ]
+
+        if project:
+            recent = [r for r in recent if r.get("project") == project]
+
+        if not recent:
+            return []
+
+        if project:
+            # Daily breakdown for one project
+            by_day: Dict[str, Dict] = {}
+            for r in recent:
+                day = r["timestamp"][:10]
+                if day not in by_day:
+                    by_day[day] = {"date": day, "project": project, "total_tokens": 0, "total_cost": 0.0, "call_count": 0}
+                by_day[day]["total_tokens"] += r["total_tokens"]
+                by_day[day]["total_cost"] += r["cost"]
+                by_day[day]["call_count"] += 1
+            return sorted(by_day.values(), key=lambda x: x["date"], reverse=True)
+
+        # Aggregate by project
+        by_project: Dict[str, Dict] = {}
+        for r in recent:
+            proj = r.get("project") or "(untagged)"
+            if proj not in by_project:
+                by_project[proj] = {"project": proj, "total_tokens": 0, "total_cost": 0.0, "call_count": 0}
+            by_project[proj]["total_tokens"] += r["total_tokens"]
+            by_project[proj]["total_cost"] += r["cost"]
+            by_project[proj]["call_count"] += 1
+        return sorted(by_project.values(), key=lambda x: x["total_cost"], reverse=True)
+
     def get_usage_stats(self, days: int = 7) -> Dict:
         """Get usage statistics for the past N days."""
         now = datetime.now()

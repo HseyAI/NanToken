@@ -6,7 +6,7 @@ A smart tool that tracks token usage, estimates costs, plans tasks, and works wi
 
 NanToken runs as an **MCP plugin** inside Claude Code, Cursor, Windsurf, and any MCP-compatible editor. No context switching — get token stats, budget alerts, and cost estimates where you code.
 
-**7 MCP Tools:**
+**9 MCP Tools:**
 | Tool | What It Does |
 |------|-------------|
 | `token_estimate` | Estimate tokens and cost before sending a prompt |
@@ -14,8 +14,10 @@ NanToken runs as an **MCP plugin** inside Claude Code, Cursor, Windsurf, and any
 | `token_budget` | Check daily/monthly budget status |
 | `token_stats` | Usage analytics for the past N days |
 | `token_plan` | Break a task into steps with per-step cost forecasts |
+| `token_compare` | Compare cost across multiple models side-by-side |
+| `token_history` | Per-project usage history and breakdown |
 | `token_cache_stats` | Semantic cache health |
-| `token_session` | Current session summary |
+| `token_session` | Current session summary (auto-tracked or manual) |
 
 ## Quick Start
 
@@ -81,9 +83,51 @@ Add NanToken to your editor's global config:
 
 > Replace `/path/to/NanToken` with the actual path where you cloned the repo.
 
-### 4. Restart your editor
+### 4. Enable auto-tracking (recommended)
 
-The NanToken tools will now appear. Try asking: *"Check my token budget"* or *"Estimate the cost of this prompt"*.
+Auto-tracking captures **real token usage** from every Claude response — no manual tracking needed.
+
+```bash
+python -m nantoken.hooks.install
+```
+
+This adds a Claude Code hook that reads actual token counts from your session transcript. Usage data is stored in `~/.nantoken/`.
+
+**Manual setup:** Add this to `~/.claude/settings.json`:
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python \"/path/to/NanToken/nantoken/hooks/stop_track.py\""
+      }
+    ]
+  }
+}
+```
+
+### 5. Restart your editor
+
+The NanToken tools will now appear. Try:
+- *"Check my token budget"* — calls `token_budget`
+- *"Compare cost of this prompt across models"* — calls `token_compare`
+- *"Show my usage by project this week"* — calls `token_history`
+- `/token` — quick dashboard (if skill is installed)
+
+### 6. Install /token slash command (optional)
+
+Copy the skill to your global Claude Code skills:
+
+```bash
+# Linux/macOS
+cp -r .claude/skills/token ~/.claude/skills/token
+
+# Windows
+xcopy .claude\skills\token %USERPROFILE%\.claude\skills\token\ /E /I
+```
+
+Then type `/token` in any project for a quick usage dashboard.
 
 ## Supported Models
 

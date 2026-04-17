@@ -9,8 +9,10 @@ Usage:
     mcp run nantoken/mcp_server.py  # Test with MCP CLI
 """
 
+import json
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -19,6 +21,9 @@ from nantoken.config import load_config, Config
 from nantoken.core import SmartLLM
 from nantoken.estimator import TokenEstimator
 from nantoken.task_planner import TaskPlanner, format_task_plan
+
+NANTOKEN_DIR = Path.home() / ".nantoken"
+SESSIONS_DIR = NANTOKEN_DIR / "sessions"
 
 # ---------------------------------------------------------------------------
 # Server instance
@@ -49,7 +54,31 @@ def _get_smartllm() -> SmartLLM:
     if _smartllm is None:
         config_path = os.environ.get("NANTOKEN_CONFIG")
         _smartllm = SmartLLM(config_path=config_path)
+        # Use centralized storage so hook data and MCP tools share the same file
+        NANTOKEN_DIR.mkdir(parents=True, exist_ok=True)
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        _smartllm.budget.storage_path = str(NANTOKEN_DIR / "usage.json")
+        _smartllm.budget._load_usage()
     return _smartllm
+
+
+def _load_auto_session() -> Optional[dict]:
+    """Find the most recently updated auto-tracked session state."""
+    if not SESSIONS_DIR.exists():
+        return None
+    best = None
+    best_time = ""
+    for f in SESSIONS_DIR.glob("*.json"):
+        try:
+            with open(f, "r") as fh:
+                state = json.load(fh)
+            updated = state.get("last_updated") or ""
+            if updated > best_time:
+                best_time = updated
+                best = state
+        except (json.JSONDecodeError, OSError):
+            continue
+    return best
 
 
 # ---------------------------------------------------------------------------
@@ -280,25 +309,210 @@ def token_cache_stats() -> str:
 def token_session() -> str:
     """Show current session summary including total tokens and cost since server started."""
     try:
-        total_tokens = _session["total_input_tokens"] + _session["total_output_tokens"]
-        avg_tokens = total_tokens / _session["total_calls"] if _session["total_calls"] > 0 else 0
+        lines = ["[Session Summary]", "=" * 40]
 
-        lines = [
-            "[Session Summary]",
-            "=" * 40,
-            f"Started:         {_session['started_at']}",
-            f"Total calls:     {_session['total_calls']}",
-            f"Input tokens:    {_session['total_input_tokens']:,}",
-            f"Output tokens:   {_session['total_output_tokens']:,}",
-            f"Total tokens:    {total_tokens:,}",
-            f"Total cost:      ${_session['total_cost']:.4f}",
-            f"Avg tokens/call: {avg_tokens:,.0f}",
-            "=" * 40,
-        ]
+        # Try auto-tracked data first (from Stop hook)
+        auto = _load_auto_session()
+        if auto and auto.get("call_count", 0) > 0:
+            total = auto["total_input_tokens"] + auto["total_output_tokens"]
+            avg = total / auto["call_count"] if auto["call_count"] > 0 else 0
+            lines.extend([
+                f"Source:          auto-tracked (hook active)",
+                f"Project:         {auto.get('project', 'N/A')}",
+                f"Started:         {auto.get('started_at', 'N/A')}",
+                f"Total calls:     {auto['call_count']}",
+                f"Input tokens:    {auto['total_input_tokens']:,}",
+                f"Output tokens:   {auto['total_output_tokens']:,}",
+                f"Total tokens:    {total:,}",
+                f"Total cost:      ${auto['total_cost']:.4f}",
+                f"Avg tokens/call: {avg:,.0f}",
+            ])
+        elif _session["total_calls"] > 0:
+            # Fall back to manually tracked data
+            total = _session["total_input_tokens"] + _session["total_output_tokens"]
+            avg = total / _session["total_calls"] if _session["total_calls"] > 0 else 0
+            lines.extend([
+                f"Source:          manually tracked",
+                f"Started:         {_session['started_at']}",
+                f"Total calls:     {_session['total_calls']}",
+                f"Input tokens:    {_session['total_input_tokens']:,}",
+                f"Output tokens:   {_session['total_output_tokens']:,}",
+                f"Total tokens:    {total:,}",
+                f"Total cost:      ${_session['total_cost']:.4f}",
+                f"Avg tokens/call: {avg:,.0f}",
+            ])
+        else:
+            lines.append("No usage recorded yet this session.")
+            lines.append("Tip: Install the auto-tracking hook with: python -m nantoken.hooks.install")
+
+        lines.append("=" * 40)
         return "\n".join(lines)
 
     except Exception as e:
         return f"Error getting session: {e}"
+
+
+@mcp.tool()
+def token_compare(
+    prompt: str,
+    models: str = "",
+) -> str:
+    """Compare estimated cost of a prompt across multiple LLM models.
+
+    Shows a side-by-side cost comparison to help pick the right model.
+
+    Args:
+        prompt: The prompt text to compare.
+        models: Comma-separated model names. Empty = compare all configured models.
+    """
+    try:
+        slm = _get_smartllm()
+        estimator = slm.estimator
+        pricing = slm.config.pricing
+
+        input_tokens = estimator.count_tokens(prompt)
+        expected_output = 500
+
+        # Determine which models to compare
+        if models:
+            model_list = [m.strip() for m in models.split(",") if m.strip()]
+        else:
+            model_list = list(pricing.model_pricing.keys())
+
+        if not model_list:
+            return "No models configured in pricing. Add models to smartllm.yaml."
+
+        results = []
+        for model_name in model_list:
+            if model_name in pricing.model_pricing:
+                mp = pricing.model_pricing[model_name]
+                in_price = mp["input"]
+                out_price = mp["output"]
+            else:
+                continue  # Skip unknown models
+
+            in_cost = (input_tokens / 1000) * in_price
+            out_cost = (expected_output / 1000) * out_price
+            total = in_cost + out_cost
+            results.append((model_name, in_cost, out_cost, total))
+
+        if not results:
+            return "None of the specified models found in pricing config."
+
+        # Sort by total cost
+        results.sort(key=lambda x: x[3])
+
+        preview = prompt[:50] + "..." if len(prompt) > 50 else prompt
+        lines = [
+            f"[Cost Comparison] \"{preview}\"",
+            f"({input_tokens:,} input tokens + ~{expected_output} output tokens)",
+            "=" * 60,
+            f"  {'Model':<25} {'Input':>10} {'Output':>10} {'Total':>10}",
+            f"  {'-'*25} {'-'*10} {'-'*10} {'-'*10}",
+        ]
+
+        for name, in_c, out_c, total in results:
+            lines.append(
+                f"  {name:<25} ${in_c:>8.4f} ${out_c:>8.4f} ${total:>8.4f}"
+            )
+
+        cheapest = results[0]
+        expensive = results[-1]
+        if len(results) > 1 and expensive[3] > 0:
+            savings = ((expensive[3] - cheapest[3]) / expensive[3]) * 100
+            lines.extend([
+                "",
+                f"  Cheapest: {cheapest[0]} (${cheapest[3]:.4f})",
+                f"  Most expensive: {expensive[0]} (${expensive[3]:.4f})",
+                f"  Potential savings: {savings:.0f}%",
+            ])
+
+        lines.append("=" * 60)
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error comparing models: {e}"
+
+
+@mcp.tool()
+def token_history(
+    days: int = 7,
+    project: str = "",
+) -> str:
+    """Show token usage history, optionally filtered by project.
+
+    Args:
+        days: Number of days to look back (default: 7).
+        project: Filter to a specific project name. Empty = show all projects.
+    """
+    try:
+        slm = _get_smartllm()
+        records = slm.budget.get_project_usage(
+            days=days, project=project or None
+        )
+
+        if not records:
+            msg = f"No usage recorded in the past {days} days"
+            if project:
+                msg += f" for project '{project}'"
+            msg += "."
+            if not project:
+                msg += "\nTip: Install the auto-tracking hook to capture per-project data."
+            return msg
+
+        if project:
+            # Daily breakdown for one project
+            lines = [
+                f"[Usage History] {project} — last {days} days",
+                "=" * 50,
+                f"  {'Date':<12} {'Calls':>8} {'Tokens':>12} {'Cost':>10}",
+                f"  {'-'*12} {'-'*8} {'-'*12} {'-'*10}",
+            ]
+            total_tokens = 0
+            total_cost = 0.0
+            total_calls = 0
+            for r in records:
+                lines.append(
+                    f"  {r['date']:<12} {r['call_count']:>8} "
+                    f"{r['total_tokens']:>12,} ${r['total_cost']:>9.4f}"
+                )
+                total_tokens += r["total_tokens"]
+                total_cost += r["total_cost"]
+                total_calls += r["call_count"]
+            lines.extend([
+                f"  {'-'*12} {'-'*8} {'-'*12} {'-'*10}",
+                f"  {'Total':<12} {total_calls:>8} {total_tokens:>12,} ${total_cost:>9.4f}",
+            ])
+        else:
+            # Per-project totals
+            lines = [
+                f"[Usage History] All projects — last {days} days",
+                "=" * 55,
+                f"  {'Project':<20} {'Calls':>8} {'Tokens':>12} {'Cost':>10}",
+                f"  {'-'*20} {'-'*8} {'-'*12} {'-'*10}",
+            ]
+            total_tokens = 0
+            total_cost = 0.0
+            total_calls = 0
+            for r in records:
+                name = r["project"][:20]
+                lines.append(
+                    f"  {name:<20} {r['call_count']:>8} "
+                    f"{r['total_tokens']:>12,} ${r['total_cost']:>9.4f}"
+                )
+                total_tokens += r["total_tokens"]
+                total_cost += r["total_cost"]
+                total_calls += r["call_count"]
+            lines.extend([
+                f"  {'-'*20} {'-'*8} {'-'*12} {'-'*10}",
+                f"  {'Total':<20} {total_calls:>8} {total_tokens:>12,} ${total_cost:>9.4f}",
+            ])
+
+        lines.append("=" * 55)
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error getting history: {e}"
 
 
 # ---------------------------------------------------------------------------

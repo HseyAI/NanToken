@@ -1,24 +1,89 @@
 # NanToken - Intelligent LLM Token Tracker
 
-A smart tool that tracks token usage, estimates costs, plans tasks, and works with ANY LLM.
+A smart tool that tracks token usage, estimates costs, plans tasks, and works with ANY LLM — right inside your AI coding terminal.
 
-## Features
+## What It Does
 
-- **Universal Support** - Works with ANY model (OpenAI, Claude, Gemini, Kimi, Qwen, DeepSeek, Llama, Ollama, etc.)
-- **Slash Commands** - Simple `/ask`, `/estimate`, `/plan`, `/budget`
-- **Inline Style** - Use `[prompt]` in scripts
-- **Token Tracking** - One-line usage after every response
-- **Task Planning** - Forecast tokens before complex tasks
-- **Budget Guard** - Set limits, get warnings
+NanToken runs as an **MCP plugin** inside Claude Code, Cursor, Windsurf, and any MCP-compatible editor. No context switching — get token stats, budget alerts, and cost estimates where you code.
+
+**7 MCP Tools:**
+| Tool | What It Does |
+|------|-------------|
+| `token_estimate` | Estimate tokens and cost before sending a prompt |
+| `token_track` | Record token usage from any LLM call |
+| `token_budget` | Check daily/monthly budget status |
+| `token_stats` | Usage analytics for the past N days |
+| `token_plan` | Break a task into steps with per-step cost forecasts |
+| `token_cache_stats` | Semantic cache health |
+| `token_session` | Current session summary |
 
 ## Quick Start
 
+### 1. Clone and install
+
 ```bash
-cd nantoken
+git clone https://github.com/HseyAI/NanToken.git
+cd NanToken
 pip install -r requirements.txt
-python ask.py --setup
-python ask.py /budget
 ```
+
+### 2. Setup config
+
+```bash
+python ask.py --setup
+```
+
+This creates `smartllm.yaml` with your provider, API key, model, and budget settings.
+
+### 3. Connect to your editor
+
+**Option A: Per-project (tools available only in the NanToken folder)**
+
+The `.mcp.json` is already in the repo. Just open the NanToken folder in Claude Code or Cursor — the tools appear automatically.
+
+**Option B: Global (tools available in every project — recommended)**
+
+Add NanToken to your editor's global config:
+
+**Claude Code** — add to `~/.claude.json`:
+```json
+{
+  "mcpServers": {
+    "nantoken": {
+      "command": "python",
+      "args": ["-m", "nantoken"],
+      "cwd": "/path/to/NanToken",
+      "env": {
+        "NANTOKEN_CONFIG": "/path/to/NanToken/smartllm.yaml"
+      }
+    }
+  }
+}
+```
+
+**Cursor** — add to `.cursor/mcp.json` or global settings:
+```json
+{
+  "mcpServers": {
+    "nantoken": {
+      "command": "python",
+      "args": ["-m", "nantoken"],
+      "cwd": "/path/to/NanToken",
+      "env": {
+        "NANTOKEN_CONFIG": "/path/to/NanToken/smartllm.yaml"
+      }
+    }
+  }
+}
+```
+
+**Windsurf / Other MCP editors** — same format, check your editor's MCP docs for the config file location.
+
+> Replace `/path/to/NanToken` with the actual path where you cloned the repo.
+
+### 4. Restart your editor
+
+The NanToken tools will now appear. Try asking: *"Check my token budget"* or *"Estimate the cost of this prompt"*.
 
 ## Supported Models
 
@@ -33,33 +98,28 @@ python ask.py /budget
 | Meta | llama-3-70b, llama-3-8b |
 | Local | ollama, lmstudio, any OpenAI-compatible |
 
-## Usage
+## Standalone CLI (Optional)
 
-### First Time Setup
-```bash
-python ask.py --setup
-```
-
-### Slash Commands
+NanToken also works as a standalone CLI if you prefer:
 
 ```bash
-# Ask LLM
-ask /ask "write hello world in python"
+# Ask LLM with tracking
+python ask.py /ask "write hello world in python"
 
-# Estimate only
-ask /estimate "create a website"
+# Estimate cost only
+python ask.py /estimate "create a website"
 
-# Plan complex task
-ask /plan "build rest api with auth"
+# Plan a complex task
+python ask.py /plan "build rest api with auth"
 
 # Check budget
-ask /budget
+python ask.py /budget
 ```
 
 ### Inline Style (for scripts)
 
 ```bash
-ask [write a function to reverse a string]
+python ask.py [write a function to reverse a string]
 ```
 
 ### Use in Your Code
@@ -78,40 +138,9 @@ print(f"Cost: ${est['estimated_cost']:.4f}")
 smart_track(input_tokens=100, output_tokens=500, model="gpt-4")
 ```
 
-## Output Examples
-
-```
-[Ask] openai/gpt-4
-Prompt: write hello world in python...
-----------------------------------------
-[Est] Input: 6 | Output: ~500 | Cost: ~$0.0151
-
-def main():
-    print("Hello, World!")
-
-if __name__ == "__main__":
-    main()
-
-[Usage] OPENAI/gpt-4 | In: 6 | Out: 42 | Total: 48 | Cost: $0.0027
-```
-
-```
-[Estimate] openai/gpt-4
-==================================================
-Prompt: build a rest api with auth...
-Input:   6 tokens
-Output:  ~500 tokens
-Total:   ~506 tokens
-Cost:    ~$0.0151
-
-Daily budget: 0/100,000 (0.0%)
-Remaining:    100,000 tokens
-==================================================
-```
-
 ## Configuration
 
-Edit `nantoken.yaml`:
+Edit `smartllm.yaml` (created by `python ask.py --setup`):
 
 ```yaml
 llm_provider: openai
@@ -134,8 +163,8 @@ pricing:
 ## Requirements
 
 - Python 3.9+
-- requests, pyyaml, tiktoken, colorama, tabulate
-- For specific providers: openai, anthropic, google-generativeai
+- Core: tiktoken, pyyaml, requests, mcp[cli]
+- Optional (for direct LLM calls): openai, anthropic, google-generativeai
 
 ## License
 

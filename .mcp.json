@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "nantoken": {
+      "command": "python",
+      "args": ["-m", "nantoken"],
+      "env": {
+        "NANTOKEN_CONFIG": "smartllm.yaml"
+      }
+    }
+  }
+}

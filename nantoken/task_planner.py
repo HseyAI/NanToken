@@ -144,7 +144,7 @@ class TaskPlanner:
             TaskStep(1, "Analyze API requirements", 150, 200, "Understanding endpoints"),
             TaskStep(2, "Plan integration approach", 200, 300, "Architecture"),
             TaskStep(3, "Generate integration code", 300, 600, "Implementation"),
-            Step(4, "Add error handling and testing", 150, 300, "Robustness"),
+            TaskStep(4, "Add error handling and testing", 150, 300, "Robustness"),
         ]
     
     def _plan_general_task(self, task: str) -> List[TaskStep]:
@@ -162,9 +162,9 @@ class TaskPlanner:
         else:
             return [
                 TaskStep(1, "Analyze requirements in detail", 200, 300, "Deep understanding"),
-TaskStep(2, "Plan approach", 150, 200, "Strategy"),
-            TaskStep(3, "Execute main task", 300, 600, "Implementation"),
-                Step(4, "Review and refine", 100, 200, "Quality"),
+                TaskStep(2, "Plan approach", 150, 200, "Strategy"),
+                TaskStep(3, "Execute main task", 300, 600, "Implementation"),
+                TaskStep(4, "Review and refine", 100, 200, "Quality"),
             ]
     
     def _determine_complexity(self, input_tokens: int, output_tokens: int) -> str:

@@ -35,6 +35,8 @@ setup(
         "tabulate>=0.9.0",
         "colorama>=0.4.6",
         "requests>=2.31.0",
+        "anthropic>=0.18.0",
+        "mcp[cli]>=1.0.0",
     ],
     extras_require={
         "dev": [

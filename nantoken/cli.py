@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
 def cmd_run(args):
     """Run prompt through LLM with optimization and tracking."""
-    from nantoken.runner import nantokenRunner
+    from nantoken.runner import SmartLLMRunner
     
     config = load_config(args.config)
     runner = SmartLLMRunner(config, args.config)

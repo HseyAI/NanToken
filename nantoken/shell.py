@@ -36,7 +36,7 @@ class SmartLLMShell:
         self.config_path = "smartllm.yaml"
         self.config = self._load_or_init()
         self.smartllm = SmartLLM(self.config)
-        from nantoken.runner import nantokenRunner
+        from nantoken.runner import SmartLLMRunner
         self.runner = SmartLLMRunner(self.config, self.config_path)
         self.running = True
     
